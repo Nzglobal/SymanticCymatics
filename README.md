@@ -1,5 +1,8 @@
 # SymanticCymatics
 
+### Why?
+I wanted to visualise real time audio, for seeing audio feedback for my guitar playing. This also works for voice or any other audio source, it allows you to see beautiful visuals.
+A big screen in a dark room is best for full immersion!
 This project is a 3D visualizer that creates cymatic patterns based on audio input. It uses WebGL through the Three.js library for rendering and allows user interaction through various controls.
 
 ## Features
@@ -22,7 +25,9 @@ This project is a 3D visualizer that creates cymatic patterns based on audio inp
     ```
 3. Open `index.html` in your web browser.
 
-## Usage
+## Screenshots
+![image](https://github.com/Nzglobal/SymanticCymatics/assets/9160922/31f86b16-39a5-4d87-a05c-1bc1d51c9e2b)
+
 
 ### Controls
 
