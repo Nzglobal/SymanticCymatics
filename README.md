@@ -18,7 +18,7 @@ This project is a 3D visualizer that creates cymatic patterns based on audio inp
     ```
 2. Navigate to the project directory:
     ```sh
-    cd 3d-cymatics-visualizer
+    cd SymanticCymatics
     ```
 3. Open `index.html` in your web browser.
 
