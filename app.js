@@ -4,6 +4,18 @@ let scene, camera, renderer, analyser, dataArray;
 let particleSystem;
 let audioContext;
 let rotateBehavior = false; // Variable to toggle rotation behavior
+let pauseAnimation = false; // Variable to pause/resume animation
+let colorCycle = false; // Variable to toggle color cycling
+
+let particleCount = 10000; // Initial particle count
+let particleSize = 0.5; // Initial particle size
+
+const movement = {
+    forward: false,
+    backward: false,
+    left: false,
+    right: false,
+};
 
 const init = () => {
     // Set up the scene, camera, and renderer
@@ -11,19 +23,39 @@ const init = () => {
     camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
     renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('visualizer') });
     renderer.setSize(window.innerWidth, window.innerHeight);
-    camera.position.z = 150; // Move the camera further back for better view
+    camera.position.z = 100; // Move the camera closer for a larger visual effect
 
     // Add particle system
-    const particleCount = 10000; // Increase particle count for denser effect
+    addParticles();
+
+    // Handle microphone input
+    document.getElementById('startButton').addEventListener('click', () => {
+        startAudioContext();
+    });
+
+    animate();
+
+    // Add event listeners for zooming
+    document.addEventListener('wheel', onDocumentMouseWheel, false);
+    document.addEventListener('touchstart', onTouchStart, false);
+    document.addEventListener('touchmove', onTouchMove, false);
+
+    // Add event listeners for camera movement and particle adjustments
+    document.addEventListener('keydown', onDocumentKeyDown, false);
+    document.addEventListener('keyup', onDocumentKeyUp, false);
+}
+
+const addParticles = () => {
     const particles = new THREE.BufferGeometry();
     const particlePositions = new Float32Array(particleCount * 3);
     const colors = new Float32Array(particleCount * 3); // For storing colors
     for (let i = 0; i < particleCount; i++) {
         const theta = Math.random() * 2 * Math.PI;
-        const radius = Math.random() * 50; // Smaller radius for more concentrated particles
-        particlePositions[i * 3] = radius * Math.cos(theta);
-        particlePositions[i * 3 + 1] = radius * Math.sin(theta);
-        particlePositions[i * 3 + 2] = Math.random() * 10 - 5; // Small Z variation
+        const phi = Math.acos(2 * Math.random() - 1);
+        const radius = Math.random() * 20; // Smaller radius for more concentrated particles
+        particlePositions[i * 3] = radius * Math.sin(phi) * Math.cos(theta);
+        particlePositions[i * 3 + 1] = radius * Math.sin(phi) * Math.sin(theta);
+        particlePositions[i * 3 + 2] = radius * Math.cos(phi);
 
         // Initialize colors to white
         colors[i * 3] = 1;
@@ -33,16 +65,9 @@ const init = () => {
     particles.setAttribute('position', new THREE.BufferAttribute(particlePositions, 3));
     particles.setAttribute('color', new THREE.BufferAttribute(colors, 3)); // Set colors
 
-    const particleMaterial = new THREE.PointsMaterial({ size: 1, vertexColors: true }); // Decrease particle size
+    const particleMaterial = new THREE.PointsMaterial({ size: particleSize, vertexColors: true }); // Set particle size
     particleSystem = new THREE.Points(particles, particleMaterial);
     scene.add(particleSystem);
-
-    // Handle microphone input
-    document.getElementById('startButton').addEventListener('click', () => {
-        startAudioContext();
-    });
-
-    animate();
 }
 
 const startAudioContext = () => {
@@ -62,7 +87,10 @@ const startAudioContext = () => {
 }
 
 const animate = () => {
-    requestAnimationFrame(animate);
+    if (!pauseAnimation) {
+        requestAnimationFrame(animate);
+    }
+
     if (analyser) {
         analyser.getByteFrequencyData(dataArray);
     }
@@ -72,18 +100,19 @@ const animate = () => {
     const colors = particleSystem.geometry.attributes.color.array;
     let highFrequencySum = 0;
     let lowFrequencySum = 0;
-    
+
     for (let i = 0; i < positions.length / 3; i++) {
         const freqIndex = i % dataArray.length;
         const value = dataArray[freqIndex];
-        const yPos = (value / 255) * 100 - 50; // Scale the yPos more drastically for cymatic effect
+        const yPos = (value / 255) * 50 - 25; // Scale the yPos for more defined patterns
 
         // Update particle positions to form cymatic patterns
-        const theta = (i / positions.length) * 2 * Math.PI * 3;
-        const radius = Math.abs(yPos); // Use yPos for radius to create rings
-        const x = radius * Math.cos(theta);
-        const y = radius * Math.sin(theta);
-        const z = Math.sin(theta * 3 + performance.now() * 0.001) * 30; // Add oscillation for 3D effect
+        const theta = (i / (positions.length / 3)) * 2 * Math.PI;
+        const phi = Math.acos(2 * (freqIndex / dataArray.length) - 1);
+        const radius = Math.abs(yPos); // Use yPos for radius to create spherical patterns
+        const x = radius * Math.sin(phi) * Math.cos(theta);
+        const y = radius * Math.sin(phi) * Math.sin(theta);
+        const z = radius * Math.cos(phi);
 
         positions[i * 3] = x;
         positions[i * 3 + 1] = y;
@@ -119,6 +148,18 @@ const animate = () => {
         particleSystem.rotation.y += 0.002;
     }
 
+    // Color cycling
+    if (colorCycle) {
+        const time = Date.now() * 0.001;
+        particleSystem.material.color.setHSL((0.5 + 0.5 * Math.sin(time)) % 1, 1, 0.5);
+    }
+
+    // Smooth camera movement
+    if (movement.forward) camera.position.z -= 1;
+    if (movement.backward) camera.position.z += 1;
+    if (movement.left) camera.position.x -= 1;
+    if (movement.right) camera.position.x += 1;
+
     renderer.render(scene, camera);
 }
 
@@ -128,6 +169,106 @@ window.addEventListener('resize', () => {
     camera.updateProjectionMatrix();
     renderer.setSize(window.innerWidth, window.innerHeight);
 });
+
+// Zoom handling
+const onDocumentMouseWheel = (event) => {
+    camera.position.z += event.deltaY * 0.05;
+}
+
+let touchStartDistance = 0;
+const onTouchStart = (event) => {
+    if (event.touches.length == 2) {
+        touchStartDistance = getTouchDistance(event.touches);
+    }
+}
+
+const onTouchMove = (event) => {
+    if (event.touches.length == 2) {
+        const touchEndDistance = getTouchDistance(event.touches);
+        const distanceChange = touchEndDistance - touchStartDistance;
+        camera.position.z -= distanceChange * 0.1;
+        touchStartDistance = touchEndDistance;
+    }
+}
+
+const getTouchDistance = (touches) => {
+    const dx = touches[0].clientX - touches[1].clientX;
+    const dy = touches[0].clientY - touches[1].clientY;
+    return Math.sqrt(dx * dx + dy * dy);
+}
+
+const onDocumentKeyDown = (event) => {
+    switch (event.key) {
+        case 'w':
+        case 'W':
+            movement.forward = true;
+            break;
+        case 's':
+        case 'S':
+            movement.backward = true;
+            break;
+        case 'a':
+        case 'A':
+            movement.left = true;
+            break;
+        case 'd':
+        case 'D':
+            movement.right = true;
+            break;
+        case 'ArrowUp':
+            particleCount += 1000;
+            scene.remove(particleSystem);
+            addParticles();
+            break;
+        case 'ArrowDown':
+            particleCount = Math.max(1000, particleCount - 1000);
+            scene.remove(particleSystem);
+            addParticles();
+            break;
+        case 'ArrowLeft':
+            particleSize = Math.max(0.1, particleSize - 0.1);
+            particleSystem.material.size = particleSize;
+            break;
+        case 'ArrowRight':
+            particleSize += 0.1;
+            particleSystem.material.size = particleSize;
+            break;
+        case 'c':
+        case 'C':
+            colorCycle = !colorCycle;
+            break;
+        case 'p':
+        case 'P':
+            pauseAnimation = !pauseAnimation;
+            if (!pauseAnimation) animate();
+            break;
+        case 'r':
+        case 'R':
+            camera.position.set(0, 0, 100);
+            break;
+    }
+}
+
+const onDocumentKeyUp = (event) => {
+    switch (event.key) {
+        case 'w':
+        case 'W':
+            movement.forward = false;
+            break;
+        case 's':
+        case 'S':
+            movement.backward = false;
+            break;
+        case 'a':
+        case 'A':
+            movement.left = false;
+            break;
+        case 'd':
+        case 'D':
+            movement.right = false;
+            break;
+    }
+}
 
 let isDragging = false;
 let previousMousePosition = {
@@ -208,9 +349,11 @@ document.addEventListener('touchend', () => {
 
 // Event listener for toggling rotation behavior with a hotkey (e.g., 'R' key)
 document.addEventListener('keydown', (event) => {
-    if (event.key === 'r' || event.key === 'R') {
-        rotateBehavior = !rotateBehavior;
-    }
+    onDocumentKeyDown(event);
+});
+
+document.addEventListener('keyup', (event) => {
+    onDocumentKeyUp(event);
 });
 
 init();
